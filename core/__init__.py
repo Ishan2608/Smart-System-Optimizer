@@ -1,0 +1,2 @@
+GEMINI_API_KEY = "AIzaSyC5xh0YbWSwOGmWx2fYqpdTEnKFW26rhLw"
+GEMINI_MODEL_NAME = "gemini-2.0-flash"
