@@ -285,3 +285,108 @@
 
 48. **What does `see()` method do: `chat_display.see(tk.END)`?**
     The `see()` method on a `tk.Text` widget makes a given index visible in the widget's view. `chat_display.see(tk.END)` scrolls the `chat_display` widget to the very end, ensuring that the most recently added message is visible to the user. This is commonly used to keep the latest part of the conversation in view as it progresses.
+
+49. **How do you handle events in Tkinter?**
+    In Tkinter, you handle events (like button clicks, key presses, mouse movements) by using the `bind()` method on a widget. You specify the event type (e.g., `<Button-1>` for left mouse click, `<Key>` for any key press), and the function (callback) that should be executed when that event occurs on that widget.
+    ```python
+    import tkinter as tk
+
+    def handle_click(event):
+        print("Button clicked at:", event.x, event.y)
+
+    root = tk.Tk()
+    button = tk.Button(root, text="Click Me")
+    button.bind("<Button-1>", handle_click)
+    button.pack()
+    root.mainloop()
+    ```
+
+50. **What is the difference between tk and ttk modules again, in terms of visual appearance and functionality?**
+    * **`tk`:** Provides the basic, standard Tkinter widgets. Their appearance is generally simpler and can look somewhat dated or platform-independent.
+    * **`ttk` (Themed Tkinter):** Offers themed versions of the core Tkinter widgets. These widgets are designed to look and feel more native to the operating system on which the application is running (e.g., Windows, macOS, Linux). Functionally, `ttk` widgets often have a slightly more modern API and can provide some enhanced styling options. For basic functionality, they are largely interchangeable with their `tk` counterparts.
+
+51. **How do you make a widget respond to keyboard input?**
+    You use the `bind()` method on the widget and bind it to keyboard-related events like `<Key>`, `<KeyPress-a>` (specific key 'a' press), `<Return>` (Enter key), etc. You then define a callback function that takes an event object (containing information about the key press) as an argument.
+    ```python
+    import tkinter as tk
+
+    def handle_keypress(event):
+        print("Key pressed:", event.char)
+
+    root = tk.Tk()
+    entry = tk.Entry(root)
+    entry.bind("<Key>", handle_keypress)
+    entry.pack()
+    root.mainloop()
+    ```
+
+52. **Why did you choose to use `grid()` for the layout in the AI Assistance tab (or whichever tab you primarily used it in)?**
+    (Answer based on your actual choice and reasoning.) For example:
+    "We chose `grid()` for the AI Assistance tab because it allows for a more structured and organized layout of the chat display area, the user input field, and the buttons. `grid()` makes it easier to align these elements in rows and columns and to control how they resize relative to each other when the window is resized. This provides a more predictable and user-friendly interface compared to the simpler, block-based arrangement of `pack()`."
+
+53. **Can you walk through the code that creates the AI chat display area? Explain each widget and its configuration.**
+    (Provide the relevant code snippet from your `gui.py` and explain each part.) For example:
+    ```python
+    self.chat_display = tk.Text(tab, state=tk.DISABLED, wrap=tk.WORD)
+    self.chat_display.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
+    ```
+    * `self.chat_display = tk.Text(tab, state=tk.DISABLED, wrap=tk.WORD)`:
+        * Creates a `tk.Text` widget named `self.chat_display`.
+        * `tab`: Specifies that this text widget is placed within the AI Assistance tab.
+        * `state=tk.DISABLED`: Initially makes the text widget read-only, preventing the user from directly typing in the chat history.
+        * `wrap=tk.WORD`: Ensures that long lines of text are wrapped at word boundaries to fit within the widget's width.
+    * `self.chat_display.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)`:
+        * Places the `chat_display` widget in the `grid()` layout of the `tab`.
+        * `row=0, column=0`: Positions it in the first row and first column.
+        * `columnspan=2`: Makes it span across two columns.
+        * `sticky="nsew"`: Causes the widget to expand and fill its entire grid cell in all directions (north, south, east, west) when the window is resized.
+        * `padx=5, pady=5`: Adds 5 pixels of padding around the widget in the horizontal and vertical directions.
+
+54. **How does the "Send" button in the AI Assistance tab trigger the communication with the backend? Explain the flow of data.**
+    1. **Button Click:** The user clicks the "Send" button.
+    2. **`command` Callback:** The `command` option of the button is set to a function (e.g., `_send_user_input`). This function is executed.
+    3. **Get User Input:** Inside `_send_user_input`, the text entered by the user in the `ttk.Entry` widget (`user_input_entry.get()`) is retrieved.
+    4. **Display User Message:** The user's input is displayed in the `chat_display` widget.
+    5. **Call Backend Function:** The `_send_user_input` function then calls a method of the `ai_client` object (which represents the backend AI logic), such as `ai_client.get_response(user_input)`.
+    6. **Backend Processing:** The `get_response` method in the backend (likely in `ai_client.py`) takes the user's input, potentially augments it with system information, and sends it to the Gemini API.
+    7. **Receive AI Response:** The Gemini API processes the input and returns a response.
+    8. **Return to Frontend:** The `get_response` method in the backend returns the AI's response to the `_send_user_input` function in the frontend.
+    9. **Display AI Response:** The `_send_user_input` function then calls another function (e.g., `_display_ai_response`) to insert the AI's response into the `chat_display` widget.
+
+55. **How is the chat history updated in the GUI when the AI sends a new response?**
+    When the `_display_ai_response` function (or a similar function) in the frontend receives the AI's response:
+    1. **Enable Text Widget:** The `state` of the `chat_display` widget is temporarily set to `tk.NORMAL` to allow editing.
+    2. **Insert AI Response:** The AI's response (along with an identifier like "SysSKY:") is inserted into the `chat_display` using the `insert(tk.END, ...)` method.
+    3. **Disable Text Widget:** The `state` of the `chat_display` is set back to `tk.DISABLED` to prevent further user editing.
+    4. **Scroll to Bottom:** The `chat_display.see(tk.END)` method is called to ensure that the newly added response is visible at the bottom of the chat history.
+
+56. **Explain the purpose of the `_clear_chat_history` function and how it interacts with both the frontend display and the backend.**
+    The `_clear_chat_history` function is responsible for resetting the chat interface. It performs the following actions:
+    1. **Frontend Display:** It clears the content of the `chat_display` widget by setting its state to `tk.NORMAL`, deleting all text from the beginning (`"1.0"`) to the end (`tk.END`), and then setting the state back to `tk.DISABLED`.
+    2. **Backend:** It calls the `reset_chat()` method of the `ai_client` object. This method in the backend is responsible for clearing the internal chat history maintained by the Gemini API for the current chat session (by creating a new chat object).
+    Essentially, `_clear_chat_history` ensures that both the user's view of the conversation and the AI's memory of the conversation are reset.
+
+57. **In the mini task manager, how is the list of processes populated? Where does this data come from? (Relate it to the backend calls).**
+    1. **Frontend Calls Backend:** When the mini task manager tab is opened or periodically updated, the frontend code calls a function in the backend (likely within `system_utils.py` or a related module) to retrieve the list of running processes and their information. This function might be named `get_running_processes()`.
+    2. **Backend Retrieves Data:** The `get_running_processes()` function in the backend uses the `psutil` library to get a snapshot of all currently running processes on the system. It then extracts relevant information for each process, such as its name, process ID (PID), CPU usage, memory usage, etc.
+    3. **Backend Returns Data:** The backend function formats this process information (e.g., as a list of dictionaries or tuples) and returns it to the frontend.
+    4. **Frontend Updates UI:** The frontend code receives this data and then iterates through it. For each process, it inserts a new row into the `tkinter.Treeview` widget (or a `tk.Listbox` if that's used) in the mini task manager tab, displaying the process details in the respective columns.
+
+58. **If you implemented process termination, explain how the frontend signals the backend to terminate a selected process.**
+    1. **User Selection:** The user selects a process from the list (e.g., in the `Treeview` or `Listbox`) in the mini task manager tab.
+    2. **"Terminate" Button Click:** The user clicks a "Terminate Process" button. The `command` of this button is linked to a function in the frontend (e.g., `on_terminate_process`).
+    3. **Get Selected PID:** The `on_terminate_process` function retrieves the Process ID (PID) of the selected process from the `Treeview` or `Listbox`.
+    4. **Call Backend Function:** The frontend function then calls a function in the backend (likely in `system_utils.py`), such as `system_utils.terminate_process(pid)`, passing the retrieved PID as an argument.
+    5. **Backend Terminates Process:** The `terminate_process` function in the backend uses the `psutil` library to locate the process with the given PID and attempts to terminate it using methods like `process.terminate()` or `process.kill()`.
+    6. **Feedback (Optional):** The backend might return a status (success or failure) to the frontend, which could then display a message to the user.
+
+59. **How did you handle potential errors or exceptions that might occur during communication with the backend or while getting system information? (Relate to `try...except` blocks).**
+    We used `try...except` blocks in both the frontend and the backend to handle potential errors gracefully:
+    * **Backend (e.g., in `ai_client.py` or `system_utils.py`):** When making calls to external APIs (like Gemini) or when using libraries like `psutil` (which might raise exceptions due to permissions or system issues), we enclosed the potentially problematic code in `try` blocks. If an exception occurred, the `except Exception as e:` block would catch it, allowing us to log the error, return an error message to the frontend, or take other appropriate actions to prevent the application from crashing.
+    * **Frontend (e.g., in `gui.py`):** When calling backend functions or when updating the UI based on data from the backend, we also used `try...except` blocks. This helps to catch errors that might occur during data transfer or processing and display informative error messages to the user in the GUI (e.g., using `tkinter.messagebox.showerror`) instead of letting the application crash.
+
+60. **How did you manage the state of the GUI (e.g., the chat history, selected processes)?**
+    GUI state was managed in several ways:
+    * **Chat History:** The chat history in the AI Assistance tab was primarily maintained within the `chat_display` `tk.Text` widget. Each new message (user or AI) was appended to this widget. The backend (`ai_client`) also maintained its own internal history for the AI's context. The `reset_chat()` function synchronized the clearing of both.
+    * **Selected Processes (Mini Task Manager):** The currently selected process in the `tkinter.Treeview` (or `Listbox`) was tracked by the widget's internal selection mechanism. The `tree.selection()` or `listbox.curselection()` methods were used to retrieve the index or ID of the selected item when an action (like "Terminate") was initiated.
+    * **Widget Properties:** The state of individual widgets (e.g., the `state` of the `chat_display` being `DISABLED` or `NORMAL`) directly reflected the current interaction mode.
