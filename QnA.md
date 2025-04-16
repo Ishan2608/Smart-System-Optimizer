@@ -1,4 +1,4 @@
-Okay, here are simple and straightforward answers to your questions:
+# Questions and Answers for Viva
 
 1.  **What is tkinter?**
     Tkinter is a standard Python library used for creating graphical user interfaces (GUIs). It's a wrapper around the Tcl/Tk toolkit.
