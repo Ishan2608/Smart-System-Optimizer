@@ -4,11 +4,116 @@ from tkinter import simpledialog
 import threading
 import core.system_utils as system_utils
 
+def apply_dark_theme(root):
+    """
+    Applies a dark blue-gray theme to the entire application.
+    
+    Args:
+        root: The main Tkinter window
+    """
+    # Define colors
+    bg_color = "#1E2430"        # Dark blue-gray
+    fg_color = "#E0E0E0"        # Light gray (almost white)
+    accent_color = "#3A506B"    # Medium blue-gray
+    highlight_color = "#5BC0BE" # Teal accent
+    button_bg = "#2C3E50"       # Slightly lighter blue-gray
+    
+    # Configure ttk style
+    style = ttk.Style()
+    
+    # Create theme
+    style.theme_create("dark_theme", parent="alt", settings={
+        "TFrame": {
+            "configure": {"background": bg_color}
+        },
+        "TNotebook": {
+            "configure": {"background": bg_color, "tabmargins": [2, 5, 2, 0]}
+        },
+        "TNotebook.Tab": {
+            "configure": {
+                "background": accent_color, 
+                "foreground": fg_color,
+                "padding": [10, 2],
+            },
+            "map": {
+                "background": [("selected", bg_color)],
+                "foreground": [("selected", highlight_color)],
+                "expand": [("selected", [1, 1, 1, 0])]
+            }
+        },
+        "TLabel": {
+            "configure": {"background": bg_color, "foreground": fg_color}
+        },
+        "TButton": {
+            "configure": {
+                "background": button_bg, 
+                "foreground": fg_color,
+                "padding": [10, 5]
+            },
+            "map": {
+                "background": [("active", highlight_color)],
+                "foreground": [("active", bg_color)]
+            }
+        },
+        "TEntry": {
+            "configure": {
+                "fieldbackground": accent_color,
+                "foreground": fg_color,
+                "insertcolor": fg_color,
+                "padding": [5, 3]
+            }
+        }
+    })
+    
+    # Set the theme
+    style.theme_use("dark_theme")
+    
+    # Configure colors for non-ttk widgets
+    root.configure(background=bg_color)
+    
+    # Additional widget-specific configurations
+    def configure_widgets(widget):
+        widget_class = widget.winfo_class()
+        
+        if widget_class == "Text":
+            widget.configure(
+                background=accent_color,
+                foreground=fg_color,
+                insertbackground=fg_color,  # Cursor color
+                selectbackground=highlight_color,
+                selectforeground=bg_color,
+                highlightthickness=1,
+                highlightbackground=accent_color,
+                highlightcolor=highlight_color,
+                relief="flat",
+                padx=5,
+                pady=5
+            )
+        elif widget_class == "Listbox":
+            widget.configure(
+                background=accent_color,
+                foreground=fg_color,
+                selectbackground=highlight_color,
+                selectforeground=bg_color,
+                highlightthickness=1,
+                highlightbackground=accent_color,
+                highlightcolor=highlight_color,
+                relief="flat"
+            )
+            
+        # Apply to children recursively
+        for child in widget.winfo_children():
+            configure_widgets(child)
+    
+    # Apply configurations to all existing widgets
+    configure_widgets(root)
+
 def create_main_window():
     """Creates the main application window."""
     root = tk.Tk()
     root.title("Smart System Optimizer")
     root.geometry("800x600")
+    apply_dark_theme(root)
     return root
 
 def create_tabs(master):
@@ -57,17 +162,18 @@ def create_system_monitor_tab(tab):
         widgets are accessible outside the function, we store them as attributes of the `tab` frame.
     """
     # Labels to display system information
-    ttk.Label(tab, text="CPU Usage:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+    cpu = ttk.Label(tab, text="CPU Usage:")
+    cpu.grid(row=0, column=0, padx=5, pady=5, sticky="w")
     cpu_label = ttk.Label(tab, text="N/A")
-    cpu_label.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+    cpu_label.grid(row=0, column=1, padx=50, pady=5, sticky="w")
 
-    ttk.Label(tab, text="RAM Usage:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+    ram = ttk.Label(tab, text="RAM Usage:")
+    ram.grid(row=1, column=0, padx=5, pady=5, sticky="w")
     ram_label = ttk.Label(tab, text="N/A")
     ram_label.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 
-    ttk.Label(tab, text="Disk Usage:").grid(
-        row=2, column=0, padx=5, pady=5, sticky="nw"
-    )  # Changed sticky to 'nw'
+    disk = ttk.Label(tab, text="Disk Usage:")
+    disk.grid(row=2, column=0, padx=5, pady=5, sticky="nw")
     disk_label = ttk.Label(tab, text="N/A")
     disk_label.grid(row=2, column=1, padx=5, pady=5, sticky="w")
 
@@ -143,8 +249,11 @@ def get_selected_process_pid(tab):
     """Gets the PID of the selected process in the process listbox."""
     try:
         selection = tab.process_listbox.curselection()
+        print(selection)
         if selection:
             selected_item = tab.process_listbox.get(selection[0])
+            print("Printing the Selected Item")
+            print(selected_item)
             pid_str = selected_item.split("(PID: ")[1].split(",")[0]
             return int(pid_str)
         else:
@@ -257,8 +366,8 @@ def create_ai_assistance_tab(tab, ai_client):
 
     # Configure row and column weights to make the widgets expand
     tab.grid_rowconfigure(0, weight=1)
-    tab.grid_rowconfigure(1, weight=0)  # Prevent entry from expanding vertically
-    tab.grid_rowconfigure(2, weight=0)  # Prevent buttons from expanding vertically
+    tab.grid_rowconfigure(1, weight=0)
+    tab.grid_rowconfigure(2, weight=0)
     tab.grid_columnconfigure(0, weight=1)
     tab.grid_columnconfigure(1, weight=1)
 
@@ -282,7 +391,7 @@ def _send_user_input(tab, ai_client, chat_display):
 
 def _display_ai_response_single(tab, response, chat_display):
     """Displays the AI's response in the single chat display (Single Text Area)."""
-    _display_chat_message(chat_display, f"SysSKY: {response}\n-------------------------------------------\n")
+    _display_chat_message(chat_display, f"SysSKY: {response}\n")
 
 def _display_chat_message(chat_display, message):
     """Helper function to display a message in the chat display."""

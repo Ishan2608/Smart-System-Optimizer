@@ -9,7 +9,7 @@ def get_ram_usage():
     """Returns the total and used RAM in GB."""
     ram = psutil.virtual_memory()
     total = ram.total / (1024 ** 3)  # Convert bytes to GB
-    used = ram.used / (1024 ** 3)
+    used = ram.used / (1024 ** 3) # Convert bytes to GB
     return total, used
 
 def get_disk_usage():
@@ -48,7 +48,8 @@ def get_running_processes():
                 "memory_percent": proc.info['memory_percent']
             })
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            pass  # Ignore processes that have terminated or we can't access
+            # Ignore processes that have terminated or we can't access
+            pass  
     return processes
 
 def terminate_process(pid):
@@ -94,16 +95,3 @@ def set_process_priority(pid, priority):
         return False
     except psutil.AccessDenied:
         return False
-
-if __name__ == '__main__':
-    # Test process functions
-    processes = get_running_processes()
-    print(processes)
-    print("First 5 Running Processes:")
-    for p in processes[:5]:
-        print(f"---{p['name']} (PID: {p['pid']})")
-
-    test_pid = processes[0]['pid'] if processes else None
-    if test_pid:
-        print(f"\nAttempting to terminate PID {test_pid} (if it exists): {terminate_process(test_pid)}")
-        print(f"Attempting to set priority of PID {test_pid} to 'idle': {set_process_priority(test_pid, 'idle')}")

@@ -20,11 +20,12 @@ def update_system_info(tab):
         messagebox.showerror("Error", f"Failed to update system info: {e}")
 
 def update_process_list(tab):
-    """Fetches the list of running processes and updates the Process Manager tab."""
+    """Fetches the list of running processes and updates the Process Manager tab after every 5 seconds."""
     try:
         processes = system_utils.get_running_processes()
         gui.update_process_manager_tab(tab, processes)
-        tab.after(5000, update_process_list, tab)  # Update every 5000 milliseconds
+        # Update every 5000 milliseconds (1 second = 1000 milliseconds)
+        tab.after(5000, update_process_list, tab)  
     except Exception as e:
         messagebox.showerror("Error", f"Failed to update process list: {e}")
 
