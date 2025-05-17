@@ -1,5 +1,3 @@
-/* Smart System Optimizer - Full Technical Documentation */
-
 # Smart System Optimizer
 A Python-based system monitoring and optimization application with AI assistance capabilities.
 
