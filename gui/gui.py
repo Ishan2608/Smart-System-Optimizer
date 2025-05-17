@@ -9,7 +9,7 @@ def apply_dark_theme(root):
     Applies a dark blue-gray theme to the entire application.
     
     Args:
-        root: The main Tkinter window
+        root: The main Tkinter window on which the style will be applied.
     """
     # Define colors
     bg_color = "#1E2430"        # Dark blue-gray
