@@ -1,5 +1,10 @@
 # Smart System Optimizer
-A Python-based system monitoring and optimization application with AI assistance capabilities.
+A Python-based system monitoring and optimization application with AI assistance capabilities. <br>
+To understand the styling code, refer to these documentations:
+- [Theme_Explanation](./docs/Theme_Tutor.md)
+- [Visual_Theme_Explanation](./docs/Theme_Visual_Understanding.md)
+
+To go through a comprehensive list of QnA that provides a good overview of the concepts of operating system related to this project, refer to this document: [QnA](./docs/QnA.md)
 
 ## Project Structure
 ```

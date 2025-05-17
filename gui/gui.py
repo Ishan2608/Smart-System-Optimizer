@@ -4,6 +4,7 @@ from tkinter import simpledialog
 import threading
 import core.system_utils as system_utils
 
+
 def apply_dark_theme(root):
     """
     Applies a dark blue-gray theme to the entire application.
@@ -17,6 +18,11 @@ def apply_dark_theme(root):
     accent_color = "#3A506B"    # Medium blue-gray
     highlight_color = "#5BC0BE" # Teal accent
     button_bg = "#2C3E50"       # Slightly lighter blue-gray
+    
+    # Font configurations - added font sizes and families
+    normal_font = ("Arial", 12)
+    header_font = ("Arial", 14, "bold")
+    button_font = ("Arial", 12)
     
     # Configure ttk style
     style = ttk.Style()
@@ -34,6 +40,7 @@ def apply_dark_theme(root):
                 "background": accent_color, 
                 "foreground": fg_color,
                 "padding": [10, 2],
+                "font": header_font,
             },
             "map": {
                 "background": [("selected", bg_color)],
@@ -42,13 +49,18 @@ def apply_dark_theme(root):
             }
         },
         "TLabel": {
-            "configure": {"background": bg_color, "foreground": fg_color}
+            "configure": {
+                "background": bg_color, 
+                "foreground": fg_color,
+                "font": normal_font
+            }
         },
         "TButton": {
             "configure": {
                 "background": button_bg, 
                 "foreground": fg_color,
-                "padding": [10, 5]
+                "padding": [10, 5],
+                "font": button_font
             },
             "map": {
                 "background": [("active", highlight_color)],
@@ -60,7 +72,8 @@ def apply_dark_theme(root):
                 "fieldbackground": accent_color,
                 "foreground": fg_color,
                 "insertcolor": fg_color,
-                "padding": [5, 3]
+                "padding": [5, 3],
+                "font": normal_font
             }
         }
     })
@@ -87,7 +100,8 @@ def apply_dark_theme(root):
                 highlightcolor=highlight_color,
                 relief="flat",
                 padx=5,
-                pady=5
+                pady=5,
+                font=normal_font  # Added font configuration
             )
         elif widget_class == "Listbox":
             widget.configure(
@@ -98,7 +112,29 @@ def apply_dark_theme(root):
                 highlightthickness=1,
                 highlightbackground=accent_color,
                 highlightcolor=highlight_color,
-                relief="flat"
+                relief="flat",
+                font=normal_font  # Added font configuration
+            )
+        elif widget_class == "Label":
+            widget.configure(
+                background=bg_color,
+                foreground=fg_color,
+                font=normal_font  # Added font configuration
+            )
+        elif widget_class == "Button":
+            widget.configure(
+                background=button_bg,
+                foreground=fg_color,
+                activebackground=highlight_color,
+                activeforeground=bg_color,
+                font=button_font  # Added font configuration
+            )
+        elif widget_class == "Entry":
+            widget.configure(
+                background=accent_color,
+                foreground=fg_color,
+                insertbackground=fg_color,
+                font=normal_font  # Added font configuration
             )
             
         # Apply to children recursively
