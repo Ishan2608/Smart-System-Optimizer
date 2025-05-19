@@ -4,7 +4,6 @@ from tkinter import simpledialog
 import threading
 import core.system_utils as system_utils
 
-
 def apply_dark_theme(root):
     """
     Applies a dark blue-gray theme to the entire application.
@@ -13,11 +12,11 @@ def apply_dark_theme(root):
         root: The main Tkinter window on which the style will be applied.
     """
     # Define colors
-    bg_color = "#1E2430"        # Dark blue-gray
-    fg_color = "#E0E0E0"        # Light gray (almost white)
-    accent_color = "#3A506B"    # Medium blue-gray
-    highlight_color = "#5BC0BE" # Teal accent
-    button_bg = "#2C3E50"       # Slightly lighter blue-gray
+    bg_color = "#1E2430"
+    fg_color = "#E0E0E0"
+    accent_color = "#3A506B"
+    highlight_color = "#5BC0BE"
+    button_bg = "#2C3E50"
     
     # Font configurations - added font sizes and families
     normal_font = ("Arial", 12)
@@ -218,6 +217,13 @@ def create_system_monitor_tab(tab):
     tab.ram_label = ram_label
     tab.disk_label = disk_label
 
+    cpu_usage = system_utils.get_cpu_usage()
+    ram_usage = system_utils.get_ram_usage()
+    disk_usage = system_utils.get_disk_usage()
+
+    # Update the labels with initial values
+    update_system_monitor_tab(tab, cpu_usage, ram_usage, disk_usage)
+
 def update_system_monitor_tab(tab, cpu_usage, ram_usage, disk_usage):
     """Updates the data displayed in the System Monitor tab."""
     tab.cpu_label.config(text=f"{cpu_usage}%")
@@ -228,6 +234,8 @@ def update_system_monitor_tab(tab, cpu_usage, ram_usage, disk_usage):
             f"{disk['partition']}: Total: {disk['total']:.2f} GB, Used: {disk['used']:.2f} GB\n"
         )
     tab.disk_label.config(text=disk_text)
+
+    tab.after(1000, update_system_monitor_tab, tab, system_utils.get_cpu_usage(), system_utils.get_ram_usage(), system_utils.get_disk_usage())
 
 # -----------------------------------------------------------------------------
 # Process Manager Tab
@@ -271,6 +279,8 @@ def create_process_manager_tab(tab):
     tab.grid_columnconfigure(0, weight=1)
     tab.grid_columnconfigure(1, weight=1)
 
+    update_process_manager_tab(tab, system_utils.get_running_processes())
+
 def update_process_manager_tab(tab, processes):
     """Updates the data displayed in the Process Manager tab."""
     tab.process_listbox.delete(0, tk.END)  # Clear the listbox
@@ -279,6 +289,8 @@ def update_process_manager_tab(tab, processes):
             tk.END,
             f"{process['name']} (PID: {process['pid']}, CPU: {process['cpu_percent']}%, Memory: {process['memory_percent']}%)",
         )
+
+    tab.after(1000, update_process_manager_tab, tab, system_utils.get_running_processes())
 
 # New functions for process management actions
 def get_selected_process_pid(tab):
@@ -344,10 +356,10 @@ def create_startup_manager_tab(tab):
     startup_listbox.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
 
     # Buttons to enable/disable startup programs
-    enable_button = ttk.Button(tab, text="Enable")
+    enable_button = ttk.Button(tab, text="Enable", command=lambda: on_enable_startup(tab))
     enable_button.grid(row=1, column=0, padx=5, pady=5, sticky="w")
 
-    disable_button = ttk.Button(tab, text="Disable")
+    disable_button = ttk.Button(tab, text="Disable", command=lambda: on_disable_startup(tab))
     disable_button.grid(row=1, column=1, padx=5, pady=5, sticky="e")
 
     # Store the widgets
@@ -360,11 +372,58 @@ def create_startup_manager_tab(tab):
     tab.grid_columnconfigure(0, weight=1)
     tab.grid_columnconfigure(1, weight=1)
 
+    # Initial update
+    update_startup_manager_tab(tab, system_utils.get_startup_programs())
+
 def update_startup_manager_tab(tab, startup_programs):
     """Updates the data displayed in the Startup Manager tab."""
     tab.startup_listbox.delete(0, tk.END)
     for program in startup_programs:
         tab.startup_listbox.insert(tk.END, program)
+
+def on_enable_startup(tab):
+    selected = tab.startup_listbox.curselection()
+    if not selected:
+        messagebox.showwarning("Warning", "No program selected.")
+        return
+    
+    item = tab.startup_listbox.get(selected[0])
+    name = item.split(":")[0].strip()
+
+    result = messagebox.askyesno(
+        "Confirm Enable",
+        f"Do you want to enable '{name}' at startup?"
+    )
+    if result:
+        # Example path — in a real app, store full path in list or use file dialog
+        success = system_utils.enable_startup_program(name, f"C:\\Path\\To\\{name}.exe")
+        if success:
+            messagebox.showinfo("Success", f"'{name}' enabled at startup.")
+            update_startup_manager_tab(tab, system_utils.get_startup_programs())
+        else:
+            messagebox.showerror("Error", f"Failed to enable '{name}'.")
+
+
+def on_disable_startup(tab):
+    selected = tab.startup_listbox.curselection()
+    if not selected:
+        messagebox.showwarning("Warning", "No program selected.")
+        return
+    
+    item = tab.startup_listbox.get(selected[0])
+    name = item.split(":")[0].strip()
+
+    result = messagebox.askyesno(
+        "Confirm Disable",
+        f"Do you want to disable '{name}' from starting automatically?"
+    )
+    if result:
+        success = system_utils.disable_startup_program(name)
+        if success:
+            messagebox.showinfo("Success", f"'{name}' disabled from startup.")
+            update_startup_manager_tab(tab, system_utils.get_startup_programs())
+        else:
+            messagebox.showerror("Error", f"Failed to disable '{name}'.")
 
 # -----------------------------------------------------------------------------
 # AI Assitance Tab

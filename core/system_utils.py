@@ -95,3 +95,64 @@ def set_process_priority(pid, priority):
         return False
     except psutil.AccessDenied:
         return False
+
+# In core/system_utils.py
+def get_startup_programs():
+    """Returns a list of startup programs from Windows registry."""
+    import winreg
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                             r"Software\Microsoft\Windows\CurrentVersion\Run")
+        i = 0
+        programs = []
+        while True:
+            name, value, _ = winreg.EnumValue(key, i)
+            programs.append(f"{name}: {value}")
+            i += 1
+    except OSError:
+        return []
+    finally:
+        winreg.CloseKey(key)
+    return programs
+
+def enable_startup_program(name, path):
+    """
+    Adds a program to the Windows startup registry.
+    Args:
+        name: Name of the program
+        path: Full executable path of the program
+    """
+    import winreg
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Run",
+                            0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, name, 0, winreg.REG_SZ, path)
+        winreg.CloseKey(key)
+        return True
+    except Exception as e:
+        print(f"Error enabling startup: {e}")
+        return False
+
+
+def disable_startup_program(name):
+    """
+    Removes a program from the Windows startup registry.
+    Args:
+        name: Name of the program to remove
+    """
+    import winreg
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Run",
+                            0, winreg.KEY_SET_VALUE)
+        winreg.DeleteValue(key, name)
+        winreg.CloseKey(key)
+        return True
+    except FileNotFoundError:
+        print(f"Program '{name}' not found in startup.")
+        return False
+    except Exception as e:
+        print(f"Error disabling startup: {e}")
+        return False
+    

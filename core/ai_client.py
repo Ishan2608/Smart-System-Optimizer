@@ -13,6 +13,26 @@ class AIClient:
         self.chat = self.client.chats.create(model=self.model)
         self.system_profile = self._get_system_profile()
 
+        # Initialize chat with role and instructions
+        self._initialize_chat_with_role()
+
+    def _initialize_chat_with_role(self):
+        """Sends a system prompt to define the AI's role and behavior."""
+        system_prompt = (
+            "You are SysSKY, an AI assistant developed by Ishan Rastogi.\n"
+            "Your purpose is to help users understand, optimize, and troubleshoot their systems.\n"
+            "You have access to real-time system information such as CPU usage, RAM, Disk, Processes, and more.\n"
+            "Use this data to give clear, actionable advice.\n"
+            "Always respond in a helpful, professional tone.\n"
+            "Do not make up data — only use what's provided in the system profile or user input.\n"
+            "Start by welcoming the user and offering assistance."
+        )
+        try:
+            # Send the system prompt as an initial message from the user
+            self.chat.send_message(system_prompt)
+        except Exception as e:
+            print(f"Error initializing chat with role: {e}")
+
     def _get_system_profile(self):
         """Collects system information to create a profile."""
         profile = {
@@ -89,19 +109,19 @@ class AIClient:
             response = self.chat.send_message(augmented_prompt)
             return response.text
         except Exception as e:
-            return f"Error: {e}", augmented_prompt
+            return f"Error: {e}"
 
     def reset_chat(self):
         """Clears the chat history by creating a new chat object."""
         self.chat = self.client.chats.create(model=self.model)
+        self._initialize_chat_with_role()  # Re-initialize after reset
 
     def get_chat_history_for_display(self):
         """Retrieves the chat history for display in the GUI."""
         history_text = ""
         for message in self.chat.history:
             role = message.role.capitalize()
-            print(role)
-            if role == "AI":
+            if role == "Ai":
                 role = "SysSKY"
             content = message.parts[0].text if message.parts else ""
             history_text += f"{role}: {content}\n"
