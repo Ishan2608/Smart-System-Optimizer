@@ -74,6 +74,44 @@ def apply_dark_theme(root):
                 "padding": [5, 3],
                 "font": normal_font
             }
+        },
+        # Added Treeview styling for dark theme
+        "Treeview": {
+            "configure": {
+                "background": accent_color,
+                "foreground": fg_color,
+                "fieldbackground": accent_color,
+                "font": normal_font
+            },
+            "map": {
+                "background": [("selected", highlight_color)],
+                "foreground": [("selected", bg_color)]
+            }
+        },
+        "Treeview.Heading": {
+            "configure": {
+                "background": button_bg,
+                "foreground": fg_color,
+                "font": header_font
+            },
+            "map": {
+                "background": [("active", highlight_color)],
+                "foreground": [("active", bg_color)]
+            }
+        },
+        # Added Scrollbar styling
+        "Vertical.TScrollbar": {
+            "configure": {
+                "background": button_bg,
+                "troughcolor": accent_color,
+                "bordercolor": accent_color,
+                "arrowcolor": fg_color,
+                "darkcolor": button_bg,
+                "lightcolor": button_bg
+            },
+            "map": {
+                "background": [("active", highlight_color)]
+            }
         }
     })
     
@@ -142,6 +180,7 @@ def apply_dark_theme(root):
     
     # Apply configurations to all existing widgets
     configure_widgets(root)
+
 
 def create_main_window():
     """Creates the main application window."""
@@ -373,113 +412,171 @@ def on_change_priority(tab, set_process_priority_func):
 
 
 # -----------------------------------------------------------------------------
-# Startup Manager Tab
+# Startup Manager Tab - FIXED VERSION
 # -----------------------------------------------------------------------------
 
 def create_startup_manager_tab(tab):
     """Creates the content for the Startup Manager tab with Treeview."""
     # Treeview to display startup programs in a table
-    startup_tree = ttk.Treeview(tab, columns=("Name", "Path"), show="headings")
+    startup_tree = ttk.Treeview(tab, columns=("Name", "Path"), show="headings", selectmode="browse")
     startup_tree.heading("Name", text="Program Name")
     startup_tree.heading("Path", text="Executable Path")
-    startup_tree.column("Name", width=200, anchor=tk.W)
-    startup_tree.column("Path", width=400, anchor=tk.W)
-    startup_tree.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+    startup_tree.column("Name", width=200, anchor=tk.W, minwidth=150)
+    startup_tree.column("Path", width=400, anchor=tk.W, minwidth=300)
+    startup_tree.grid(row=0, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
 
-    # Scrollbar
+    # Scrollbar for the treeview
     scrollbar = ttk.Scrollbar(tab, orient="vertical", command=startup_tree.yview)
-    startup_tree.configure(yscroll=scrollbar.set)
-    scrollbar.grid(row=0, column=2, sticky="ns")
+    startup_tree.configure(yscrollcommand=scrollbar.set)
+    scrollbar.grid(row=0, column=3, sticky="ns", pady=5)
+
+    # Status label to show current selection
+    status_label = ttk.Label(tab, text="Select a program to enable/disable")
+    status_label.grid(row=1, column=0, columnspan=4, padx=5, pady=5, sticky="ew")
 
     # Buttons to enable/disable startup programs
-    enable_button = ttk.Button(tab, text="Enable", command=lambda: on_enable_startup(startup_tree))
-    enable_button.grid(row=1, column=0, padx=5, pady=5, sticky="w")
-    disable_button = ttk.Button(tab, text="Disable", command=lambda: on_disable_startup(startup_tree))
-    disable_button.grid(row=1, column=1, padx=5, pady=5, sticky="e")
+    enable_button = ttk.Button(tab, text="Enable", 
+                              command=lambda: on_enable_startup(tab))
+    enable_button.grid(row=2, column=0, padx=5, pady=5, sticky="w")
+    
+    disable_button = ttk.Button(tab, text="Disable", 
+                               command=lambda: on_disable_startup(tab))
+    disable_button.grid(row=2, column=1, padx=5, pady=5, sticky="e")
 
-    # Store reference to tree widget
+    # Store references to widgets in the tab
     tab.startup_tree = startup_tree
+    tab.status_label = status_label
+    tab.enable_button = enable_button
+    tab.disable_button = disable_button
+    tab.selected_program_name = None
+    tab.selected_program_path = None
 
-    # Configure row/column weights
+    # Configure tab grid weights
     tab.grid_rowconfigure(0, weight=1)
     tab.grid_columnconfigure(0, weight=1)
     tab.grid_columnconfigure(1, weight=1)
 
     # Bind selection event
-    startup_tree.bind("<<TreeviewSelect>>", lambda e: on_startup_select(e, startup_tree))
+    startup_tree.bind("<<TreeviewSelect>>", lambda e: on_startup_select(e, tab))
 
     # Initial update
-    update_startup_manager_tab(startup_tree, system_utils.get_startup_programs())
+    update_startup_manager_tab(tab, system_utils.get_startup_programs())
 
-def update_startup_manager_tab(tree, startup_programs):
+
+
+def update_startup_manager_tab(tab, startup_programs):
     """Updates the data displayed in the Startup Manager tab using Treeview."""
-    for item in tree.get_children():
-        tree.delete(item)
+    # Clear existing items
+    for item in tab.startup_tree.get_children():
+        tab.startup_tree.delete(item)
+    
+    # Clear selection tracking
+    tab.selected_program_name = None
+    tab.selected_program_path = None
 
     if not startup_programs:
-        tree.insert("", tk.END, values=("No startup programs found.", ""))
+        # Insert a placeholder item when no programs are found
+        tab.startup_tree.insert("", tk.END, values=("No startup programs found", ""), tags=("placeholder",))
+        tab.startup_tree.tag_configure("placeholder", foreground="gray")
         return
 
     for program in startup_programs:
         try:
-            name, path = program.split(":", 1)  # Split only once
-            name = name.strip()
-            path = path.strip()
-            tree.insert("", tk.END, values=(name, path))
-        except ValueError:
-            tree.insert("", tk.END, values=("Invalid entry", program))
+            # Handle the program string format "name: path"
+            if ":" in program:
+                name, path = program.split(":", 1)  # Split only on first colon
+                name = name.strip()
+                path = path.strip()
+            else:
+                # Handle cases where there's no colon separator
+                name = program.strip()
+                path = "Path not available"
+            
+            # Insert the program into the treeview
+            tab.startup_tree.insert("", tk.END, values=(name, path))
+            
+        except Exception as e:
+            # Handle any parsing errors gracefully
+            tab.startup_tree.insert("", tk.END, values=("Error parsing entry", str(program)))
 
-def on_startup_select(event, tree):
+def on_startup_select(event, tab):
     """Callback function when a startup program is selected."""
-    selected_items = tree.selection()
+    selected_items = tab.startup_tree.selection()
     if selected_items:
         item = selected_items[0]
-        name = tree.item(item, "values")[0]
-        print(f"Selected startup program: {name}")  # Optional debug output
-        # You can store this value in tab or use it directly
+        values = tab.startup_tree.item(item, "values")
+        
+        if len(values) >= 2 and values[0] != "No startup programs found":
+            tab.selected_program_name = values[0]
+            tab.selected_program_path = values[1]
+            tab.status_label.config(text=f"Selected: {tab.selected_program_name}")
+        else:
+            tab.selected_program_name = None
+            tab.selected_program_path = None
+            tab.status_label.config(text="Invalid selection")
     else:
-        print("No item selected.")
+        tab.selected_program_name = None
+        tab.selected_program_path = None
+        tab.status_label.config(text="No program selected")
 
-def on_enable_startup(tree):
-    selected = tree.selection()
-    if not selected:
-        messagebox.showwarning("Warning", "No program selected.")
+
+
+
+
+
+
+def on_enable_startup(tab):
+    """Handles enabling a selected startup program."""
+    if not tab.selected_program_name or tab.selected_program_name == "No startup programs found":
+        messagebox.showwarning("Warning", "Please select a program to enable.")
         return
-    item = selected[0]
-    name = tree.item(item, "values")[0].strip()
     
-    result = messagebox.askyesno(
-        "Confirm Enable",
-        f"Do you want to enable '{name}' at startup?"
-    )
-    if result:
-        success = system_utils.enable_startup_program(name, f"C:\\Path\\To\\{name}.exe")
-        if success:
-            messagebox.showinfo("Success", f"'{name}' enabled at startup.")
-            update_startup_manager_tab(tree, system_utils.get_startup_programs())
-        else:
-            messagebox.showerror("Error", f"Failed to enable '{name}'.")
+    # For programs that might be disabled, we need to re-enable them
+    # This assumes the program path is available
+    if not tab.selected_program_path or tab.selected_program_path == "Path not available":
+        # Ask user for the path if not available
+        path = simpledialog.askstring(
+            "Enable Startup Program",
+            f"Enter the full executable path for '{tab.selected_program_name}':\n(e.g., C:\\Program Files\\MyApp\\MyApp.exe)"
+        )
+        if not path:
+            return
+    else:
+        path = tab.selected_program_path
+    
+    # Confirm the action
+    confirm_message = f"Enable '{tab.selected_program_name}' at startup?"
+    if messagebox.askyesno("Confirm Enable", confirm_message):
+        try:
+            success = system_utils.enable_startup_program(tab.selected_program_name, path)
+            if success:
+                messagebox.showinfo("Success", f"'{tab.selected_program_name}' has been enabled at startup.")
+                # Refresh the list to show updated status
+                update_startup_manager_tab(tab, system_utils.get_startup_programs())
+            else:
+                messagebox.showerror("Error", f"Failed to enable '{tab.selected_program_name}' at startup.")
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred: {str(e)}")
 
-
-def on_disable_startup(tree):
-    selected = tree.selection()
-    if not selected:
-        messagebox.showwarning("Warning", "No program selected.")
+def on_disable_startup(tab):
+    """Handles disabling a selected startup program."""
+    if not tab.selected_program_name or tab.selected_program_name == "No startup programs found":
+        messagebox.showwarning("Warning", "Please select a program to disable.")
         return
-    item = selected[0]
-    name = tree.item(item, "values")[0].strip()
     
-    result = messagebox.askyesno(
-        "Confirm Disable",
-        f"Do you want to disable '{name}' from starting automatically?"
-    )
-    if result:
-        success = system_utils.disable_startup_program(name)
-        if success:
-            messagebox.showinfo("Success", f"'{name}' disabled from startup.")
-            update_startup_manager_tab(tree, system_utils.get_startup_programs())
-        else:
-            messagebox.showerror("Error", f"Failed to disable '{name}'.")
+    # Confirm the action
+    confirm_message = f"Disable '{tab.selected_program_name}' from starting automatically?"
+    if messagebox.askyesno("Confirm Disable", confirm_message):
+        try:
+            success = system_utils.disable_startup_program(tab.selected_program_name)
+            if success:
+                messagebox.showinfo("Success", f"'{tab.selected_program_name}' has been disabled from startup.")
+                # Refresh the list to show updated status
+                update_startup_manager_tab(tab, system_utils.get_startup_programs())
+            else:
+                messagebox.showerror("Error", f"Failed to disable '{tab.selected_program_name}' from startup.")
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred: {str(e)}")
 
 # -----------------------------------------------------------------------------
 # AI Assitance Tab
