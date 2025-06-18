@@ -1,6 +1,9 @@
 import psutil
 import platform
 
+# Global path cache to preserve paths across disable/enable
+disabled_program_cache = {}
+
 def get_cpu_usage(interval=0.1):  # 0.1 seconds interval
     """Returns the current CPU usage as a percentage."""
     return psutil.cpu_percent(interval=interval)
@@ -97,41 +100,110 @@ def set_process_priority(pid, priority):
         return False
 
 def get_startup_programs():
-    """Returns a list of startup programs from Windows registry."""
+    """
+    Returns a list of startup programs, both enabled and disabled,
+    with their path and status, from both HKCU and HKLM.
+    Falls back to cached path if available.
+    """
     import winreg
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                             r"Software\Microsoft\Windows\CurrentVersion\Run")
-        i = 0
-        programs = []
-        while True:
-            name, value, _ = winreg.EnumValue(key, i)
-            programs.append(f"{name}: {value}")
-            i += 1
-    except OSError as e:
-        print(f"Error accessing registry: {e}")  # Log error
-        return []
-    finally:
+
+    # Use the global cache
+    global disabled_program_cache
+
+    def read_run_key(root, path):
+        """Reads enabled entries with paths from the Run key."""
+        programs = {}
         try:
-            winreg.CloseKey(key)
-        except:
+            with winreg.OpenKey(root, path) as key:
+                i = 0
+                while True:
+                    name, value, _ = winreg.EnumValue(key, i)
+                    programs[name] = value
+                    i += 1
+        except OSError:
             pass
         return programs
 
-def enable_startup_program(name, path):
+    def read_startup_approved_key(root, path):
+        """Reads enabled/disabled status from StartupApproved."""
+        status_map = {}
+        try:
+            with winreg.OpenKey(root, path) as key:
+                i = 0
+                while True:
+                    name, data, _ = winreg.EnumValue(key, i)
+                    # Byte[0] = 2 (enabled), 3 (disabled)
+                    status_map[name] = "enabled" if data[0] == 2 else "disabled"
+                    i += 1
+        except OSError:
+            pass
+        return status_map
+
+    # Step 1: Fetch paths from Run keys
+    run_hkcu = read_run_key(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run")
+    run_hklm = read_run_key(winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run")
+
+    # Step 2: Fetch statuses from StartupApproved keys
+    approved_hkcu = read_startup_approved_key(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run")
+    approved_hklm = read_startup_approved_key(winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run")
+
+    # Step 3: Merge all unique program names from all sources
+    all_programs = set(run_hkcu.keys()) | set(run_hklm.keys()) | set(approved_hkcu.keys()) | set(approved_hklm.keys())
+
+    result = []
+
+    for name in all_programs:
+        # Determine path: prefer live registry, fallback to in-memory cache
+        path = run_hkcu.get(name) or run_hklm.get(name) or disabled_program_cache.get(name) or "Path not available"
+
+        # Determine status: prefer explicitly marked status, default to enabled
+        status = approved_hkcu.get(name) or approved_hklm.get(name) or "enabled"
+
+        result.append({
+            "name": name,
+            "path": path,
+            "status": status
+        })
+
+    return result
+
+
+def enable_startup_program(name, path, scope="user"):
     """
-    Adds a program to the Windows startup registry.
+    Enables a startup program by writing to both Run and StartupApproved registry keys.
     Args:
         name: Name of the program
         path: Full executable path of the program
+        scope: "user" or "machine"
     """
     import winreg
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                            r"Software\Microsoft\Windows\CurrentVersion\Run",
-                            0, winreg.KEY_SET_VALUE)
-        winreg.SetValueEx(key, name, 0, winreg.REG_SZ, path)
-        winreg.CloseKey(key)
+        root = winreg.HKEY_CURRENT_USER if scope == "user" else winreg.HKEY_LOCAL_MACHINE
+        access = winreg.KEY_SET_VALUE
+        if scope == "machine":
+            access |= winreg.KEY_WOW64_64KEY
+
+        # Step 1: Write to Run key
+        run_key = winreg.OpenKey(
+            root,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0,
+            access
+        )
+        winreg.SetValueEx(run_key, name, 0, winreg.REG_SZ, path)
+        winreg.CloseKey(run_key)
+
+        # Step 2: Write to StartupApproved to mark as enabled
+        approved_key = winreg.OpenKey(
+            root,
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+            0,
+            access
+        )
+        # Byte 0 = 2 = enabled
+        winreg.SetValueEx(approved_key, name, 0, winreg.REG_BINARY, bytes([0x02, 0x00, 0x00, 0x00]))
+        winreg.CloseKey(approved_key)
+
         return True
     except Exception as e:
         print(f"Error enabling startup: {e}")
@@ -140,22 +212,40 @@ def enable_startup_program(name, path):
 
 def disable_startup_program(name):
     """
-    Removes a program from the Windows startup registry.
-    Args:
-        name: Name of the program to remove
+    Disables a startup program by removing it from Run and writing 'disabled' status to StartupApproved.
+    Caches the path in-memory so it can still be shown in the UI.
     """
     import winreg
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                            r"Software\Microsoft\Windows\CurrentVersion\Run",
-                            0, winreg.KEY_SET_VALUE)
-        winreg.DeleteValue(key, name)
-        winreg.CloseKey(key)
-        return True
-    except FileNotFoundError:
-        print(f"Program '{name}' not found in startup.")
-        return False
-    except Exception as e:
-        print(f"Error disabling startup: {e}")
-        return False
-    
+    removed = False
+
+    for root in [winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE]:
+        try:
+            access = winreg.KEY_ALL_ACCESS
+            if root == winreg.HKEY_LOCAL_MACHINE:
+                access |= winreg.KEY_WOW64_64KEY
+
+            key = winreg.OpenKey(root, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, access)
+
+            try:
+                path, _ = winreg.QueryValueEx(key, name)
+                disabled_program_cache[name] = path  # Save path before deleting
+                winreg.DeleteValue(key, name)
+                removed = True
+            except FileNotFoundError:
+                pass
+            winreg.CloseKey(key)
+
+            # Mark it as disabled in StartupApproved
+            approved_key = winreg.OpenKey(
+                root,
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+                0,
+                access
+            )
+            winreg.SetValueEx(approved_key, name, 0, winreg.REG_BINARY, bytes([0x03, 0x00, 0x00, 0x00]))  # disabled
+            winreg.CloseKey(approved_key)
+
+        except Exception as e:
+            print(f"[Disable] Error for {name} in registry: {e}")
+
+    return removed
