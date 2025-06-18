@@ -226,55 +226,69 @@ def create_tabs(master):
 # -----------------------------------------------------------------------------
 
 def create_system_monitor_tab(tab):
-    """
-        Creates the content for the System Monitor tab.
-        Create 3 static labels, and create their respective labels to display CPU, RAM, and Disk usage.
-        The labels should be aligned to the left and top of the tab.
-        ---
-        Arguments
-        - `tab`: argument is the tab frame where the content will be placed. To ensure that the variables representing
-        widgets are accessible outside the function, we store them as attributes of the `tab` frame.
-    """
-    # Labels to display system information
-    cpu = ttk.Label(tab, text="CPU Usage:")
-    cpu.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-    cpu_label = ttk.Label(tab, text="N/A")
-    cpu_label.grid(row=0, column=1, padx=50, pady=5, sticky="w")
+    """Creates the redesigned System Monitor tab with bar charts."""
+    # Canvas dimensions
+    canvas_width = 200
+    canvas_height = 100
 
-    ram = ttk.Label(tab, text="RAM Usage:")
-    ram.grid(row=1, column=0, padx=5, pady=5, sticky="w")
-    ram_label = ttk.Label(tab, text="N/A")
-    ram_label.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+    # CPU Chart
+    cpu_canvas = tk.Canvas(tab, width=canvas_width, height=canvas_height, bg="#3A506B", highlightthickness=0)
+    cpu_canvas.grid(row=0, column=0, padx=10, pady=10)
+    cpu_label = ttk.Label(tab, text="CPU", anchor="center")
+    cpu_label.grid(row=1, column=0)
 
-    disk = ttk.Label(tab, text="Disk Usage:")
-    disk.grid(row=2, column=0, padx=5, pady=5, sticky="nw")
-    disk_label = ttk.Label(tab, text="N/A")
-    disk_label.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+    # RAM Chart
+    ram_canvas = tk.Canvas(tab, width=canvas_width, height=canvas_height, bg="#3A506B", highlightthickness=0)
+    ram_canvas.grid(row=0, column=1, padx=10, pady=10)
+    ram_label = ttk.Label(tab, text="RAM", anchor="center")
+    ram_label.grid(row=1, column=1)
 
-    # Store the labels in as properties of tabs so we can update them later outside the function.
-    tab.cpu_label = cpu_label
-    tab.ram_label = ram_label
-    tab.disk_label = disk_label
+    # Disk Chart (we'll show total used % across all partitions for simplicity)
+    disk_canvas = tk.Canvas(tab, width=canvas_width, height=canvas_height, bg="#3A506B", highlightthickness=0)
+    disk_canvas.grid(row=0, column=2, padx=10, pady=10)
+    disk_label = ttk.Label(tab, text="Disk", anchor="center")
+    disk_label.grid(row=1, column=2)
 
-    cpu_usage = system_utils.get_cpu_usage()
-    ram_usage = system_utils.get_ram_usage()
-    disk_usage = system_utils.get_disk_usage()
+    # Save for updates
+    tab.cpu_canvas = cpu_canvas
+    tab.ram_canvas = ram_canvas
+    tab.disk_canvas = disk_canvas
 
-    # Update the labels with initial values
-    update_system_monitor_tab(tab, cpu_usage, ram_usage, disk_usage)
+    update_system_monitor_tab(tab)
 
-def update_system_monitor_tab(tab, cpu_usage, ram_usage, disk_usage):
-    """Updates the data displayed in the System Monitor tab."""
-    tab.cpu_label.config(text=f"{cpu_usage}%")
-    tab.ram_label.config(text=f"Total: {ram_usage[0]:.2f} GB, Used: {ram_usage[1]:.2f} GB")
-    disk_text = ""
-    for disk in disk_usage:
-        disk_text += (
-            f"{disk['partition']}: Total: {disk['total']:.2f} GB, Used: {disk['used']:.2f} GB\n"
-        )
-    tab.disk_label.config(text=disk_text)
+def update_system_monitor_tab(tab):
+    """Updates the system monitor tab with live chart data."""
+    cpu = system_utils.get_cpu_usage()
+    ram_total, ram_used = system_utils.get_ram_usage()
+    disk_info = system_utils.get_disk_usage()
 
-    tab.after(1000, update_system_monitor_tab, tab, system_utils.get_cpu_usage(), system_utils.get_ram_usage(), system_utils.get_disk_usage())
+    ram_percent = (ram_used / ram_total) * 100 if ram_total > 0 else 0
+    total_disk = sum(d['total'] for d in disk_info if not d.get("error"))
+    used_disk = sum(d['used'] for d in disk_info if not d.get("error"))
+    disk_percent = (used_disk / total_disk) * 100 if total_disk > 0 else 0
+
+    draw_usage_bar(tab.cpu_canvas, cpu, "CPU")
+    draw_usage_bar(tab.ram_canvas, ram_percent, "RAM")
+    draw_usage_bar(tab.disk_canvas, disk_percent, "Disk")
+
+    tab.after(1000, update_system_monitor_tab, tab)
+
+def draw_usage_bar(canvas, percent, label):
+    """Draws a usage bar inside a canvas based on percentage."""
+    canvas.delete("all")
+    width = int(canvas.winfo_width())
+    height = int(canvas.winfo_height())
+    fill_width = int((percent / 100) * width)
+
+    # Background bar
+    canvas.create_rectangle(0, 0, width, height, fill="#2C3E50", outline="")
+
+    # Foreground bar
+    canvas.create_rectangle(0, 0, fill_width, height, fill="#5BC0BE", outline="")
+
+    # Text in the center
+    canvas.create_text(width // 2, height // 2, text=f"{percent:.1f}%", fill="#E0E0E0", font=("Arial", 14, "bold"))
+
 
 # -----------------------------------------------------------------------------
 # Process Manager Tab
