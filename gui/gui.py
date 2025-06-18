@@ -281,41 +281,40 @@ def update_system_monitor_tab(tab, cpu_usage, ram_usage, disk_usage):
 # -----------------------------------------------------------------------------
 
 def create_process_manager_tab(tab):
-    """Creates the content for the Process Manager tab."""
-    # Listbox to display processes
-    process_listbox = tk.Listbox(tab)
-    process_listbox.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+    """Creates the content for the Process Manager tab using Treeview."""
+    # Treeview to display processes
+    process_tree = ttk.Treeview(tab, columns=("PID", "Name", "CPU", "Memory"), show="headings", selectmode="browse")
+    process_tree.heading("PID", text="PID")
+    process_tree.heading("Name", text="Process Name")
+    process_tree.heading("CPU", text="CPU %")
+    process_tree.heading("Memory", text="Memory %")
+    process_tree.column("PID", width=80, anchor=tk.W)
+    process_tree.column("Name", width=250, anchor=tk.W)
+    process_tree.column("CPU", width=80, anchor=tk.CENTER)
+    process_tree.column("Memory", width=100, anchor=tk.CENTER)
+    process_tree.grid(row=0, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
 
-    # Store a dictionary to map listbox indices to process PIDs (or full process objects)
-    # This will help maintain selection
-    tab.process_info_map = {}
-    tab.selected_pid = None # New attribute to store the PID of the currently selected process
+    # Scrollbar
+    scrollbar = ttk.Scrollbar(tab, orient="vertical", command=process_tree.yview)
+    process_tree.configure(yscrollcommand=scrollbar.set)
+    scrollbar.grid(row=0, column=3, sticky="ns", pady=5)
 
-    # Bind the ListboxSelect event to update selected_pid
-    # This ensures that when the user clicks an item, we capture its PID immediately.
-    process_listbox.bind("<<ListboxSelect>>", lambda event: on_process_select(event, tab))
+    # Buttons
+    terminate_button = ttk.Button(tab, text="Terminate Process", command=lambda: on_terminate_process(tab, system_utils.terminate_process))
+    terminate_button.grid(row=1, column=0, padx=5, pady=5, sticky="w")
 
-    # Buttons to manage processes
-    terminate_button = ttk.Button(
-        tab,
-        text="Terminate Process",
-        command=lambda: on_terminate_process(tab, system_utils.terminate_process)
-    )
-    terminate_button.grid(row=1, column=0, padx=5, pady=5, sticky='w')
+    priority_button = ttk.Button(tab, text="Change Priority", command=lambda: on_change_priority(tab, system_utils.set_process_priority))
+    priority_button.grid(row=1, column=1, padx=5, pady=5, sticky="e")
 
-    priority_button = ttk.Button(
-        tab,
-        text="Change Priority",
-        command=lambda: on_change_priority(tab, system_utils.set_process_priority)
-    )
-    priority_button.grid(row=1, column=1, padx=5, pady=5, sticky='e')
-
-    # Store the widgets so we can interact with them later
-    tab.process_listbox = process_listbox
+    # Store references
+    tab.process_tree = process_tree
     tab.terminate_button = terminate_button
     tab.priority_button = priority_button
+    tab.selected_pid = None
+    tab.pid_map = {}
 
-    # Configure row and column weights to make the widgets expand
+    # Events and layout
+    process_tree.bind("<<TreeviewSelect>>", lambda e: on_process_select(e, tab))
     tab.grid_rowconfigure(0, weight=1)
     tab.grid_columnconfigure(0, weight=1)
     tab.grid_columnconfigure(1, weight=1)
@@ -324,74 +323,61 @@ def create_process_manager_tab(tab):
     update_process_manager_tab(tab, system_utils.get_running_processes())
 
 def update_process_manager_tab(tab, processes):
-    """Updates the data displayed in the Process Manager tab, preserving selection."""
-    # Store the currently selected PID before clearing the listbox
+    """Updates the Treeview in the Process Manager tab, preserving selection."""
     previously_selected_pid = tab.selected_pid
+    tree = tab.process_tree
+    tree.delete(*tree.get_children())  # Clear current entries
+    tab.pid_map = {}
 
-    tab.process_listbox.delete(0, tk.END)  # Clear the listbox
-    tab.process_info_map = {} # Clear the map
+    for process in processes:
+        pid = process["pid"]
+        name = process["name"]
+        cpu = f"{process['cpu_percent']:.1f}"
+        mem = f"{process['memory_percent']:.1f}"
+        item_id = tree.insert("", tk.END, values=(pid, name, cpu, mem))
+        tab.pid_map[item_id] = pid
 
-    for i, process in enumerate(processes):
-        display_text = (
-            f"{process['name']} (PID: {process['pid']}, CPU: {process['cpu_percent']}%, Memory: {process['memory_percent']}%)"
-        )
-        tab.process_listbox.insert(tk.END, display_text)
-        tab.process_info_map[i] = process # Map listbox index to the full process dictionary
-
-    # Try to re-select the process if it was previously selected and still exists
-    if previously_selected_pid is not None:
-        for i, process in enumerate(processes):
-            if process['pid'] == previously_selected_pid:
-                tab.process_listbox.selection_set(i)
-                tab.process_listbox.see(i) # Scroll to the selected item if necessary
+    # Restore selection
+    if previously_selected_pid:
+        for item_id, pid in tab.pid_map.items():
+            if pid == previously_selected_pid:
+                tree.selection_set(item_id)
+                tree.see(item_id)
                 break
         else:
-            # If the previously selected PID is no longer in the list (e.g., terminated), clear selection
             tab.selected_pid = None
 
     tab.after(1000, update_process_manager_tab, tab, system_utils.get_running_processes())
 
 def on_process_select(event, tab):
-    """Callback function when a process is selected in the listbox."""
-    selection = tab.process_listbox.curselection()
-    if selection:
-        selected_index = selection[0]
-        selected_process = tab.process_info_map.get(selected_index)
-        if selected_process:
-            tab.selected_pid = selected_process['pid']
-        else:
-            tab.selected_pid = None # Should not happen if map is correctly maintained
+    """Triggered when a user selects a process in the Treeview."""
+    selected = tab.process_tree.selection()
+    if selected:
+        item_id = selected[0]
+        pid = tab.pid_map.get(item_id)
+        tab.selected_pid = pid
     else:
-        tab.selected_pid = None # No item is selected
+        tab.selected_pid = None
 
 def get_selected_process_pid(tab):
-    """Gets the PID of the selected process from the stored attribute."""
-    # Now we directly use the stored PID
-    if tab.selected_pid:
-        # As a robustness check, you could also verify if this PID still exists in the current process list
-        # However, the update_process_manager_tab should handle clearing it if it's gone.
-        return tab.selected_pid
-    else:
-        return None
+    """Returns the PID of the selected process, if any."""
+    return tab.selected_pid
 
 def on_terminate_process(tab, terminate_process_func):
-    """Handles the "Terminate Process" button click."""
+    """Terminate the selected process."""
     pid = get_selected_process_pid(tab)
     if pid:
         if messagebox.askyesno("Confirm", f"Terminate process with PID {pid}?"):
             if terminate_process_func(pid):
                 messagebox.showinfo("Success", f"Process with PID {pid} terminated.")
-                # Clear the stored selected PID as it's now terminated
                 tab.selected_pid = None
             else:
                 messagebox.showerror("Error", f"Failed to terminate process with PID {pid}.")
-            # The next scheduled update_process_manager_tab call will refresh the list
-            # and automatically remove the terminated process.
     else:
         messagebox.showwarning("Warning", "No process selected.")
 
 def on_change_priority(tab, set_process_priority_func):
-    """Handles the "Change Priority" button click."""
+    """Change the priority of the selected process."""
     pid = get_selected_process_pid(tab)
     if pid:
         priority = simpledialog.askstring(
@@ -399,14 +385,9 @@ def on_change_priority(tab, set_process_priority_func):
         )
         if priority:
             if set_process_priority_func(pid, priority.lower()):
-                messagebox.showinfo(
-                    "Success", f"Priority of process with PID {pid} changed to {priority}."
-                )
+                messagebox.showinfo("Success", f"Priority of PID {pid} changed to {priority}.")
             else:
-                messagebox.showerror(
-                    "Error", f"Failed to change priority of process with PID {pid}."
-                )
-            # No need to manually update here, the next scheduled update will refresh.
+                messagebox.showerror("Error", f"Failed to change priority for PID {pid}.")
     else:
         messagebox.showwarning("Warning", "No process selected.")
 
