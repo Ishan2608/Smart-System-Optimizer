@@ -247,14 +247,16 @@ def create_process_manager_tab(tab):
     process_listbox = tk.Listbox(tab)
     process_listbox.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
 
+    # Store a dictionary to map listbox indices to process PIDs (or full process objects)
+    # This will help maintain selection
+    tab.process_info_map = {}
+    tab.selected_pid = None # New attribute to store the PID of the currently selected process
+
+    # Bind the ListboxSelect event to update selected_pid
+    # This ensures that when the user clicks an item, we capture its PID immediately.
+    process_listbox.bind("<<ListboxSelect>>", lambda event: on_process_select(event, tab))
+
     # Buttons to manage processes
-    terminate_button = ttk.Button(tab, text="Terminate Process")
-    terminate_button.grid(row=1, column=0, padx=5, pady=5, sticky="w")
-
-    priority_button = ttk.Button(tab, text="Change Priority")
-    priority_button.grid(row=1, column=1, padx=5, pady=5, sticky="e")
-
-   # Buttons to manage processes
     terminate_button = ttk.Button(
         tab,
         text="Terminate Process",
@@ -279,34 +281,58 @@ def create_process_manager_tab(tab):
     tab.grid_columnconfigure(0, weight=1)
     tab.grid_columnconfigure(1, weight=1)
 
+    # Initial update
     update_process_manager_tab(tab, system_utils.get_running_processes())
 
 def update_process_manager_tab(tab, processes):
-    """Updates the data displayed in the Process Manager tab."""
+    """Updates the data displayed in the Process Manager tab, preserving selection."""
+    # Store the currently selected PID before clearing the listbox
+    previously_selected_pid = tab.selected_pid
+
     tab.process_listbox.delete(0, tk.END)  # Clear the listbox
-    for process in processes:
-        tab.process_listbox.insert(
-            tk.END,
-            f"{process['name']} (PID: {process['pid']}, CPU: {process['cpu_percent']}%, Memory: {process['memory_percent']}%)",
+    tab.process_info_map = {} # Clear the map
+
+    for i, process in enumerate(processes):
+        display_text = (
+            f"{process['name']} (PID: {process['pid']}, CPU: {process['cpu_percent']}%, Memory: {process['memory_percent']}%)"
         )
+        tab.process_listbox.insert(tk.END, display_text)
+        tab.process_info_map[i] = process # Map listbox index to the full process dictionary
+
+    # Try to re-select the process if it was previously selected and still exists
+    if previously_selected_pid is not None:
+        for i, process in enumerate(processes):
+            if process['pid'] == previously_selected_pid:
+                tab.process_listbox.selection_set(i)
+                tab.process_listbox.see(i) # Scroll to the selected item if necessary
+                break
+        else:
+            # If the previously selected PID is no longer in the list (e.g., terminated), clear selection
+            tab.selected_pid = None
 
     tab.after(1000, update_process_manager_tab, tab, system_utils.get_running_processes())
 
-# New functions for process management actions
-def get_selected_process_pid(tab):
-    """Gets the PID of the selected process in the process listbox."""
-    try:
-        selection = tab.process_listbox.curselection()
-        print(selection)
-        if selection:
-            selected_item = tab.process_listbox.get(selection[0])
-            print("Printing the Selected Item")
-            print(selected_item)
-            pid_str = selected_item.split("(PID: ")[1].split(",")[0]
-            return int(pid_str)
+def on_process_select(event, tab):
+    """Callback function when a process is selected in the listbox."""
+    selection = tab.process_listbox.curselection()
+    if selection:
+        selected_index = selection[0]
+        selected_process = tab.process_info_map.get(selected_index)
+        if selected_process:
+            tab.selected_pid = selected_process['pid']
         else:
-            return None
-    except IndexError:
+            tab.selected_pid = None # Should not happen if map is correctly maintained
+    else:
+        tab.selected_pid = None # No item is selected
+
+def get_selected_process_pid(tab):
+    """Gets the PID of the selected process from the stored attribute."""
+    # Now we directly use the stored PID
+    if tab.selected_pid:
+        # As a robustness check, you could also verify if this PID still exists in the current process list
+        # However, the update_process_manager_tab should handle clearing it if it's gone.
+        return tab.selected_pid
+    else:
         return None
 
 def on_terminate_process(tab, terminate_process_func):
@@ -316,10 +342,12 @@ def on_terminate_process(tab, terminate_process_func):
         if messagebox.askyesno("Confirm", f"Terminate process with PID {pid}?"):
             if terminate_process_func(pid):
                 messagebox.showinfo("Success", f"Process with PID {pid} terminated.")
+                # Clear the stored selected PID as it's now terminated
+                tab.selected_pid = None
             else:
                 messagebox.showerror("Error", f"Failed to terminate process with PID {pid}.")
-            processes = system_utils.get_running_processes()
-            update_process_manager_tab(tab, processes)
+            # The next scheduled update_process_manager_tab call will refresh the list
+            # and automatically remove the terminated process.
     else:
         messagebox.showwarning("Warning", "No process selected.")
 
@@ -339,8 +367,7 @@ def on_change_priority(tab, set_process_priority_func):
                 messagebox.showerror(
                     "Error", f"Failed to change priority of process with PID {pid}."
                 )
-            processes = system_utils.get_running_processes()
-            update_process_manager_tab(tab, processes)
+            # No need to manually update here, the next scheduled update will refresh.
     else:
         messagebox.showwarning("Warning", "No process selected.")
 
@@ -350,69 +377,98 @@ def on_change_priority(tab, set_process_priority_func):
 # -----------------------------------------------------------------------------
 
 def create_startup_manager_tab(tab):
-    """Creates the content for the Startup Manager tab."""
-    # Listbox to display startup programs
-    startup_listbox = tk.Listbox(tab)
-    startup_listbox.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+    """Creates the content for the Startup Manager tab with Treeview."""
+    # Treeview to display startup programs in a table
+    startup_tree = ttk.Treeview(tab, columns=("Name", "Path"), show="headings")
+    startup_tree.heading("Name", text="Program Name")
+    startup_tree.heading("Path", text="Executable Path")
+    startup_tree.column("Name", width=200, anchor=tk.W)
+    startup_tree.column("Path", width=400, anchor=tk.W)
+    startup_tree.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+
+    # Scrollbar
+    scrollbar = ttk.Scrollbar(tab, orient="vertical", command=startup_tree.yview)
+    startup_tree.configure(yscroll=scrollbar.set)
+    scrollbar.grid(row=0, column=2, sticky="ns")
 
     # Buttons to enable/disable startup programs
-    enable_button = ttk.Button(tab, text="Enable", command=lambda: on_enable_startup(tab))
+    enable_button = ttk.Button(tab, text="Enable", command=lambda: on_enable_startup(startup_tree))
     enable_button.grid(row=1, column=0, padx=5, pady=5, sticky="w")
-
-    disable_button = ttk.Button(tab, text="Disable", command=lambda: on_disable_startup(tab))
+    disable_button = ttk.Button(tab, text="Disable", command=lambda: on_disable_startup(startup_tree))
     disable_button.grid(row=1, column=1, padx=5, pady=5, sticky="e")
 
-    # Store the widgets
-    tab.startup_listbox = startup_listbox
-    tab.enable_button = enable_button
-    tab.disable_button = disable_button
+    # Store reference to tree widget
+    tab.startup_tree = startup_tree
 
-    # Configure row and column weights to make the widgets expand
+    # Configure row/column weights
     tab.grid_rowconfigure(0, weight=1)
     tab.grid_columnconfigure(0, weight=1)
     tab.grid_columnconfigure(1, weight=1)
 
+    # Bind selection event
+    startup_tree.bind("<<TreeviewSelect>>", lambda e: on_startup_select(e, startup_tree))
+
     # Initial update
-    update_startup_manager_tab(tab, system_utils.get_startup_programs())
+    update_startup_manager_tab(startup_tree, system_utils.get_startup_programs())
 
-def update_startup_manager_tab(tab, startup_programs):
-    """Updates the data displayed in the Startup Manager tab."""
-    tab.startup_listbox.delete(0, tk.END)
+def update_startup_manager_tab(tree, startup_programs):
+    """Updates the data displayed in the Startup Manager tab using Treeview."""
+    for item in tree.get_children():
+        tree.delete(item)
+
+    if not startup_programs:
+        tree.insert("", tk.END, values=("No startup programs found.", ""))
+        return
+
     for program in startup_programs:
-        tab.startup_listbox.insert(tk.END, program)
+        try:
+            name, path = program.split(":", 1)  # Split only once
+            name = name.strip()
+            path = path.strip()
+            tree.insert("", tk.END, values=(name, path))
+        except ValueError:
+            tree.insert("", tk.END, values=("Invalid entry", program))
 
-def on_enable_startup(tab):
-    selected = tab.startup_listbox.curselection()
+def on_startup_select(event, tree):
+    """Callback function when a startup program is selected."""
+    selected_items = tree.selection()
+    if selected_items:
+        item = selected_items[0]
+        name = tree.item(item, "values")[0]
+        print(f"Selected startup program: {name}")  # Optional debug output
+        # You can store this value in tab or use it directly
+    else:
+        print("No item selected.")
+
+def on_enable_startup(tree):
+    selected = tree.selection()
     if not selected:
         messagebox.showwarning("Warning", "No program selected.")
         return
+    item = selected[0]
+    name = tree.item(item, "values")[0].strip()
     
-    item = tab.startup_listbox.get(selected[0])
-    name = item.split(":")[0].strip()
-
     result = messagebox.askyesno(
         "Confirm Enable",
         f"Do you want to enable '{name}' at startup?"
     )
     if result:
-        # Example path — in a real app, store full path in list or use file dialog
         success = system_utils.enable_startup_program(name, f"C:\\Path\\To\\{name}.exe")
         if success:
             messagebox.showinfo("Success", f"'{name}' enabled at startup.")
-            update_startup_manager_tab(tab, system_utils.get_startup_programs())
+            update_startup_manager_tab(tree, system_utils.get_startup_programs())
         else:
             messagebox.showerror("Error", f"Failed to enable '{name}'.")
 
 
-def on_disable_startup(tab):
-    selected = tab.startup_listbox.curselection()
+def on_disable_startup(tree):
+    selected = tree.selection()
     if not selected:
         messagebox.showwarning("Warning", "No program selected.")
         return
+    item = selected[0]
+    name = tree.item(item, "values")[0].strip()
     
-    item = tab.startup_listbox.get(selected[0])
-    name = item.split(":")[0].strip()
-
     result = messagebox.askyesno(
         "Confirm Disable",
         f"Do you want to disable '{name}' from starting automatically?"
@@ -421,7 +477,7 @@ def on_disable_startup(tab):
         success = system_utils.disable_startup_program(name)
         if success:
             messagebox.showinfo("Success", f"'{name}' disabled from startup.")
-            update_startup_manager_tab(tab, system_utils.get_startup_programs())
+            update_startup_manager_tab(tree, system_utils.get_startup_programs())
         else:
             messagebox.showerror("Error", f"Failed to disable '{name}'.")
 
@@ -501,6 +557,3 @@ def _clear_chat_history(tab, ai_client, chat_display):
     chat_display.config(state=tk.NORMAL)
     chat_display.delete("1.0", tk.END)
     chat_display.config(state=tk.DISABLED)
-
-
-

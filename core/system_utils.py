@@ -96,7 +96,6 @@ def set_process_priority(pid, priority):
     except psutil.AccessDenied:
         return False
 
-# In core/system_utils.py
 def get_startup_programs():
     """Returns a list of startup programs from Windows registry."""
     import winreg
@@ -109,11 +108,15 @@ def get_startup_programs():
             name, value, _ = winreg.EnumValue(key, i)
             programs.append(f"{name}: {value}")
             i += 1
-    except OSError:
+    except OSError as e:
+        print(f"Error accessing registry: {e}")  # Log error
         return []
     finally:
-        winreg.CloseKey(key)
-    return programs
+        try:
+            winreg.CloseKey(key)
+        except:
+            pass
+        return programs
 
 def enable_startup_program(name, path):
     """
